@@ -1,0 +1,121 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&family=Crimson+Pro:ital,wght@1,400;1,600&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  --font-serif: "Crimson Pro", serif;
+}
+
+:root {
+  --app-bg: #030406;
+  --surface: #0a0c10;
+  --surface-accent: #0f1218;
+  --accent: #818cf8;
+  --accent-cyan: #22d3ee;
+  --accent-magenta: #f472b6;
+  --accent-lime: #a3e635;
+  --accent-orange: #fb923c;
+  --accent-glow: rgba(129, 140, 248, 0.4);
+  --text-dim: #475569;
+  --text-main: #94a3b8;
+  --text-bright: #f8fafc;
+  --border: rgba(255, 255, 255, 0.05);
+  transition: background-color 0.4s cubic-bezier(0.4, 0, 0.2, 1), color 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.light {
+  --app-bg: #f8fafc;
+  --surface: #ffffff;
+  --surface-accent: #f1f5f9;
+  --accent: #4f46e5;
+  --accent-cyan: #0891b2;
+  --accent-magenta: #db2777;
+  --accent-lime: #65a30d;
+  --accent-orange: #ea580c;
+  --accent-glow: rgba(79, 70, 229, 0.1);
+  --text-dim: #64748b;
+  --text-main: #334155;
+  --text-bright: #0f172a;
+  --border: rgba(0, 0, 0, 0.05);
+}
+
+@layer base {
+  body {
+    @apply bg-[var(--app-bg)] text-[var(--text-main)] antialiased selection:bg-[var(--accent)] selection:text-white text-[13px] tracking-tight;
+    font-feature-settings: "cv02", "cv05", "cv11", "ss01";
+    transition: background-color 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+}
+
+@utility glass {
+  @apply bg-white/[0.01] backdrop-blur-3xl border border-white/[0.08] rounded-xl;
+}
+
+@utility mesh-bg {
+  @apply fixed inset-0 -z-10 pointer-events-none;
+  background: 
+    radial-gradient(circle at 0% 0%, rgba(99, 102, 241, 0.1) 0%, transparent 40%),
+    radial-gradient(circle at 100% 0%, rgba(34, 211, 238, 0.08) 0%, transparent 40%),
+    radial-gradient(circle at 100% 100%, rgba(244, 114, 182, 0.08) 0%, transparent 40%),
+    radial-gradient(circle at 0% 100%, rgba(163, 230, 53, 0.05) 0%, transparent 40%),
+    linear-gradient(to bottom, transparent, rgba(0,0,0,0.6)),
+    var(--app-bg);
+}
+
+@utility neon-glow {
+  filter: drop-shadow(0 0 8px currentColor);
+}
+
+@utility animate-mesh {
+  @apply fixed inset-0 -z-10 pointer-events-none opacity-40;
+  background-image: 
+    radial-gradient(at 0% 0%, rgba(99, 102, 241, 0.15) 0px, transparent 50%),
+    radial-gradient(at 100% 100%, rgba(244, 114, 182, 0.15) 0px, transparent 50%),
+    radial-gradient(at 100% 0%, rgba(34, 211, 238, 0.1) 0px, transparent 50%),
+    radial-gradient(at 0% 100%, rgba(163, 230, 53, 0.1) 0px, transparent 50%);
+  animation: mesh-move 20s ease infinite;
+}
+
+@keyframes mesh-move {
+  0%, 100% { transform: scale(1) translate(0px, 0px); }
+  33% { transform: scale(1.1) translate(10px, -10px); }
+  66% { transform: scale(0.9) translate(-10px, 10px); }
+}
+
+@utility scanning-line {
+  @apply fixed inset-0 pointer-events-none -z-5 opacity-5;
+  background: linear-gradient(to bottom, 
+    transparent 0%, 
+    rgba(129, 140, 248, 0.2) 50%, 
+    transparent 100%
+  );
+  background-size: 100% 4px;
+}
+
+@utility btn-primary {
+  @apply px-5 py-2.5 bg-gradient-to-r from-indigo-600 via-cyan-500 to-indigo-600 animate-gradient-x text-white font-bold uppercase tracking-[0.2em] text-[9px] rounded-xl hover:shadow-[0_0_25px_rgba(34,211,238,0.4)] active:scale-[0.98] transition-all disabled:opacity-30 disabled:pointer-events-none shadow-xl shadow-indigo-900/20;
+}
+
+@utility btn-secondary {
+  @apply px-4 py-2 bg-white/5 border border-white/10 text-[var(--text-bright)] font-bold uppercase tracking-widest text-[9px] rounded-xl hover:bg-white/[0.1] hover:border-indigo-500/30 active:scale-[0.98] transition-all;
+}
+
+@utility tag {
+  @apply bg-indigo-500/10 border border-indigo-500/20 text-[8px] text-cyan-400 font-black px-1.5 py-0.5 rounded uppercase tracking-widest neon-glow;
+}
+
+@utility input-field {
+  @apply w-full bg-black/30 border border-[var(--border)] rounded-md px-3 py-2 text-[12px] focus:border-[var(--accent)]/40 focus:bg-black/50 outline-none transition-all placeholder:text-slate-800;
+}
+
+@keyframes gradient-x {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+
+@utility animate-gradient-x {
+  animation: gradient-x 3s ease infinite;
+  background-size: 200% 200%;
+}
+
