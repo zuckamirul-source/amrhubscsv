@@ -5,15 +5,19 @@ import { Marketplace } from "../types";
 
 export type AISericeEngine = 'gemini' | 'groq' | 'mistral';
 
-const GET_PROMPT = (keywordCount: number, marketplace: Marketplace = 'shutterstock') => {
+const GET_PROMPT = (keywordCount: number, useSingleWordKeywords: boolean = false, marketplace: Marketplace = 'shutterstock') => {
   const marketplaceNames: Record<Marketplace, string> = {
     shutterstock: "Shutterstock"
   };
 
   const name = marketplaceNames[marketplace];
+  const keywordInstruction = useSingleWordKeywords 
+    ? "Each keyword MUST be a SINGLE WORD only (no phrases, no spaces)." 
+    : "Keywords can be single words or highly relevant short phrases.";
 
   return `Analyze this image and generate professional metadata strictly for the ${name} marketplace.
 DO NOT use any special or "social" characters such as forward slashes (/), hashtags (#), or at symbols (@) in the description or keywords.
+${keywordInstruction}
 You MUST return ONLY a valid JSON object with EXACTLY these fields:
 {
   "description": "A descriptive, SEO-optimized title (70-200 characters). Describe the literal content, setting, and mood without flowery adjectives. NO FORWARD SLASHES (/).",
@@ -37,9 +41,10 @@ export const generateMetadata = async (
   engine: AISericeEngine = 'gemini',
   customApiKey?: string,
   keywordCount: number = 35,
+  useSingleWordKeywords: boolean = false,
   marketplace: Marketplace = 'shutterstock'
 ) => {
-  const prompt = GET_PROMPT(keywordCount, marketplace);
+  const prompt = GET_PROMPT(keywordCount, useSingleWordKeywords, marketplace);
   let result;
   if (engine === 'groq') {
     result = await generateMetadataGroq(base64Image, mimeType, prompt, customApiKey);
@@ -58,7 +63,15 @@ export const generateMetadata = async (
     }
     if (Array.isArray(result.keywords)) {
       result.keywords = result.keywords
-        .map((k: any) => typeof k === 'string' ? sanitize(k) : '')
+        .map((k: any) => {
+          if (typeof k !== 'string') return '';
+          let sanitized = sanitize(k);
+          if (useSingleWordKeywords) {
+            // Keep only the first word if single word is enforced
+            sanitized = sanitized.split(' ')[0] || '';
+          }
+          return sanitized;
+        })
         .filter((k: string) => k && k.length > 0)
         .slice(0, Math.min(keywordCount, 50));
     }
@@ -189,7 +202,10 @@ const generateMetadataMistral = async (base64Image: string, mimeType: string, pr
     const content: any = response.choices?.[0]?.message?.content;
     const text = typeof content === 'string' ? content : (Array.isArray(content) ? content[0]?.text : "{}") || "{}";
     return parseJSONData(text);
-  } catch (error) {
+  } catch (error: any) {
+    if (error.message && error.message.includes('401')) {
+      throw new Error(`Mistral Unauthorized: Please check if API Key is valid and active.`);
+    }
     console.error("Mistral API Error details:", error);
     throw error;
   }

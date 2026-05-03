@@ -79,6 +79,9 @@ export default function App() {
     const val = saved ? parseInt(saved, 10) : 35;
     return Math.max(25, Math.min(45, val));
   });
+  const [useSingleWordKeywords, setUseSingleWordKeywords] = useState<boolean>(() => {
+    return localStorage.getItem('use_single_word_keywords') === 'true';
+  });
   const [isDragging, setIsDragging] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
@@ -182,6 +185,10 @@ export default function App() {
           setGeminiApiKeys(finalKeys);
           localStorage.setItem('gemini_api_keys', JSON.stringify(finalKeys));
         }
+        if (typeof data.useSingleWordKeywords === 'boolean') {
+          setUseSingleWordKeywords(data.useSingleWordKeywords);
+          localStorage.setItem('use_single_word_keywords', String(data.useSingleWordKeywords));
+        }
       }
     }, (error) => {
       handleFirestoreError(error, OperationType.GET, `users/${user.uid}`);
@@ -189,6 +196,26 @@ export default function App() {
 
     return () => unsubscribe();
   }, [user]);
+
+  const toggleSingleWordKeywords = async () => {
+    const newVal = !useSingleWordKeywords;
+    setUseSingleWordKeywords(newVal);
+    localStorage.setItem('use_single_word_keywords', String(newVal));
+
+    if (user) {
+      setIsSyncing(true);
+      try {
+        await setDoc(doc(db, 'users', user.uid), {
+          useSingleWordKeywords: newVal,
+          updatedAt: serverTimestamp()
+        }, { merge: true });
+      } catch (error) {
+        handleFirestoreError(error, OperationType.WRITE, `users/${user.uid}`);
+      } finally {
+        setIsSyncing(false);
+      }
+    }
+  };
 
   const handleMistralApiKeyChange = async (index: number, val: string) => {
     const newKeys = [...mistralApiKeys];
@@ -309,8 +336,17 @@ export default function App() {
     let successCount = 0;
 
     // Unified Engine Pool: Combine all active keys from both providers for parallel grid processing
-    const activeMistral = mistralApiKeys.filter(k => k.trim() !== '').map(k => ({ engine: 'mistral' as AISericeEngine, key: k }));
-    const activeGemini = geminiApiKeys.filter(k => k.trim() !== '').map(k => ({ engine: 'gemini' as AISericeEngine, key: k }));
+    const activeMistral = mistralApiKeys.map((k, index) => ({ 
+      engine: 'mistral' as AISericeEngine, 
+      key: k.trim(),
+      nodeIndex: index + 1
+    })).filter(node => node.key !== '');
+    
+    const activeGemini = geminiApiKeys.map((k, index) => ({ 
+      engine: 'gemini' as AISericeEngine, 
+      key: k.trim(),
+      nodeIndex: index + 1
+    })).filter(node => node.key !== '');
     
     const availableNodes = [...activeMistral, ...activeGemini];
 
@@ -349,33 +385,41 @@ export default function App() {
           
           // Neural Grid Rotation: Switch between engines based on rotation through pool
           const node = availableNodes[(nodeIndex + currentAttempt) % availableNodes.length];
+          const nodeLabel = `${node.engine === 'mistral' ? 'Mistral' : 'Gemini'} Node ${node.nodeIndex}`;
 
-          const metadata = await generateMetadata(
-            base64, 
-            mimeType, 
-            node.engine, 
-            node.key,
-            keywordCount,
-            marketplace
-          );
-          
-          if (!metadata) throw new Error("AI Engine returned empty result");
+          try {
+            const metadata = await generateMetadata(
+              base64, 
+              mimeType, 
+              node.engine, 
+              node.key,
+              keywordCount,
+              useSingleWordKeywords,
+              marketplace
+            );
+            
+            if (!metadata) throw new Error("AI Engine returned empty result");
 
-          const normalizedCat1 = SHUTTERSTOCK_CATEGORIES.find(c => c.toLowerCase() === (metadata.category1 || '').toLowerCase()) || (SHUTTERSTOCK_CATEGORIES.includes(metadata.category1) ? metadata.category1 : SHUTTERSTOCK_CATEGORIES[15]);
-          const normalizedCat2 = SHUTTERSTOCK_CATEGORIES.find(c => c.toLowerCase() === (metadata.category2 || '').toLowerCase()) || (SHUTTERSTOCK_CATEGORIES.includes(metadata.category2) ? metadata.category2 : "");
+            const normalizedCat1 = SHUTTERSTOCK_CATEGORIES.find(c => c.toLowerCase() === (metadata.category1 || '').toLowerCase()) || (SHUTTERSTOCK_CATEGORIES.includes(metadata.category1) ? metadata.category1 : SHUTTERSTOCK_CATEGORIES[15]);
+            const normalizedCat2 = SHUTTERSTOCK_CATEGORIES.find(c => c.toLowerCase() === (metadata.category2 || '').toLowerCase()) || (SHUTTERSTOCK_CATEGORIES.includes(metadata.category2) ? metadata.category2 : "");
 
-          setImages(prev => prev.map(i => i.id === img.id ? { 
-            ...i, 
-            description: metadata.description || '',
-            keywords: Array.isArray(metadata.keywords) ? metadata.keywords : [],
-            category1: normalizedCat1,
-            category2: normalizedCat2,
-            status: 'completed',
-            progress: 100
-          } : i));
-          successCount++;
-          clearInterval(progressInterval);
-          return true;
+            setImages(prev => prev.map(i => i.id === img.id ? { 
+              ...i, 
+              description: metadata.description || '',
+              keywords: Array.isArray(metadata.keywords) ? metadata.keywords : [],
+              category1: normalizedCat1,
+              category2: normalizedCat2,
+              status: 'completed',
+              progress: 100
+            } : i));
+            successCount++;
+            clearInterval(progressInterval);
+            return true;
+          } catch (error: any) {
+            // Enhanced error message with node info
+            const enhancedError = new Error(`[${nodeLabel}] ${error.message || 'Unknown Error'}`);
+            throw enhancedError;
+          }
         } catch (error: any) {
           clearInterval(progressInterval);
           console.error(`Attempt ${currentAttempt + 1} failed for`, img.filename, error);
@@ -1202,6 +1246,30 @@ export default function App() {
                         </button>
                       ))}
                     </div>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="flex justify-between items-center bg-black/20 p-4 rounded-xl border border-white/5 hover:border-indigo-500/30 transition-all group">
+                    <div className="space-y-1">
+                      <label className="text-[10px] uppercase font-black tracking-widest text-white group-hover:text-indigo-400">Single Word Tokens</label>
+                      <p className="text-[9px] text-slate-500 uppercase tracking-widest font-bold">Force Keywords to Solo Vectors</p>
+                    </div>
+                    <button 
+                      onClick={toggleSingleWordKeywords}
+                      className={cn(
+                        "w-12 h-6 rounded-full relative transition-all duration-300 overflow-hidden border",
+                        useSingleWordKeywords ? "bg-indigo-600 border-indigo-400" : "bg-black/40 border-white/10"
+                      )}
+                    >
+                      <motion.div 
+                        animate={{ x: useSingleWordKeywords ? 24 : 4 }}
+                        className={cn(
+                          "absolute top-1 w-4 h-4 rounded-full shadow-lg transition-colors",
+                          useSingleWordKeywords ? "bg-white" : "bg-slate-600"
+                        )}
+                      />
+                    </button>
                   </div>
                 </div>
 
